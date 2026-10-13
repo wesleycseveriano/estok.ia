@@ -65,7 +65,7 @@
 
   /* ---------- layout ---------- */
   .layout {
-    display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px;
+    display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px;
     padding: 24px; max-width: 1400px; margin: 0 auto;
   }
   @media (max-width: 900px) {
@@ -121,14 +121,59 @@
   .mini-form span { font-size: 13px; color: var(--texto-suave); }
   .vazio { padding: 32px 16px; text-align: center; color: var(--texto-suave); }
 
-  /* ---------- chat (reservado) ---------- */
+  /* ---------- chat ---------- */
   aside.chat {
-    display: flex; flex-direction: column; justify-content: center; align-items: center;
-    min-height: 320px; padding: 24px; text-align: center; color: var(--texto-suave);
-    border-style: dashed;
+    display: flex; flex-direction: column; overflow: hidden;
+    align-self: start; position: sticky; top: 16px;
+    height: min(720px, calc(100vh - 32px));
   }
-  aside.chat h2 { margin: 0 0 4px; font-size: 16px; color: var(--texto); }
-  aside.chat p { margin: 0; font-size: 14px; }
+  .chat-topo {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 12px 16px; border-bottom: 1px solid var(--borda);
+  }
+  .chat-topo h2 { margin: 0; font-size: 16px; }
+  .chat-topo p { margin: 0; font-size: 12px; color: var(--texto-suave); }
+  #chat-fechar { display: none; }
+  #chat-historico {
+    flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .msg {
+    max-width: 88%; padding: 8px 12px; border-radius: 12px; white-space: pre-line;
+    overflow-wrap: anywhere; font-size: 14px;
+  }
+  .msg.bot { align-self: flex-start; background: var(--fundo); border-bottom-left-radius: 4px; }
+  .msg.usuario {
+    align-self: flex-end; background: var(--primaria); color: var(--primaria-texto);
+    border-bottom-right-radius: 4px;
+  }
+  .msg.erro { align-self: flex-start; background: var(--perigo-fundo); color: var(--perigo); }
+  .msg.pensando { color: var(--texto-suave); font-style: italic; }
+  .msg.pensando::after { content: ""; animation: reticencias 1.2s steps(4) infinite; }
+  @keyframes reticencias { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+  .chat-confirmacao { display: flex; gap: 8px; padding: 0 16px 12px; }
+  .chat-confirmacao[hidden] { display: none; }
+  .chat-confirmacao button { flex: 1; }
+  .botao-sucesso { background: var(--sucesso); border-color: var(--sucesso); color: #fff; font-weight: 600; }
+  #chat-form { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--borda); }
+  #chat-form input { flex: 1; }
+  #chat-abrir { display: none; }
+
+  @media (max-width: 900px) {
+    aside.chat {
+      display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 20;
+      height: 100vh; height: 100dvh; border-radius: 0; border: none;
+    }
+    body.chat-aberto { overflow: hidden; }
+    body.chat-aberto #chat-abrir { display: none; }
+    aside.chat.aberto { display: flex; }
+    #chat-fechar { display: inline-block; }
+    #chat-abrir {
+      display: flex; align-items: center; gap: 8px;
+      position: fixed; right: 16px; bottom: 16px; z-index: 15;
+      padding: 12px 18px; border-radius: 999px; box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+    }
+    #chat-abrir svg { width: 20px; height: 20px; }
+  }
 
   /* ---------- diálogos ---------- */
   dialog {
@@ -146,8 +191,8 @@
 
   /* ---------- avisos ---------- */
   #avisos {
-    position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px;
-    z-index: 10; max-width: calc(100vw - 32px);
+    position: fixed; right: 16px; top: 16px; display: grid; gap: 8px;
+    z-index: 30; max-width: calc(100vw - 32px);
   }
   .aviso {
     padding: 10px 14px; border-radius: var(--raio); background: var(--painel);
@@ -190,11 +235,30 @@
     </div>
   </main>
 
-  <aside class="painel chat" aria-label="Chat">
-    <h2>Chat</h2>
-    <p>Em breve: controle o estoque escrevendo em linguagem natural.</p>
+  <aside id="chat" class="painel chat" aria-label="Chat do estoque">
+    <div class="chat-topo">
+      <div>
+        <h2>Chat</h2>
+        <p>Movimente e consulte o estoque escrevendo.</p>
+      </div>
+      <button id="chat-fechar" type="button" aria-label="Fechar chat">Fechar</button>
+    </div>
+    <div id="chat-historico" aria-live="polite"></div>
+    <div id="chat-confirmacao" class="chat-confirmacao" hidden>
+      <button type="button" class="botao-sucesso" data-resposta="sim">Sim</button>
+      <button type="button" data-resposta="não">Não</button>
+    </div>
+    <form id="chat-form" autocomplete="off">
+      <input id="chat-texto" maxlength="500" placeholder="Ex.: saiu 1 HD Seagate 1TB" aria-label="Mensagem">
+      <button type="submit" class="botao-primario">Enviar</button>
+    </form>
   </aside>
 </div>
+
+<button id="chat-abrir" class="botao-primario" type="button" aria-controls="chat">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  Chat
+</button>
 
 <!-- Formulário de novo item / edição -->
 <dialog id="dialogo-item">
@@ -238,7 +302,9 @@
 <script>
 "use strict";
 
-const NOMES_CAMPOS = { tipo: "Tipo", marca: "Marca", modelo: "Modelo", quantidade: "Quantidade" };
+const NOMES_CAMPOS = {
+  tipo: "Tipo", marca: "Marca", modelo: "Modelo", quantidade: "Quantidade", mensagem: "Mensagem",
+};
 
 const estado = {
   idsEstoqueBaixo: new Set(),
@@ -272,7 +338,7 @@ function traduzirErroValidacao(erro) {
     int_parsing: "deve ser um número inteiro",
     int_from_float: "deve ser um número inteiro",
     string_too_short: "é obrigatório",
-    string_too_long: "deve ter no máximo 100 caracteres",
+    string_too_long: `deve ter no máximo ${erro.ctx?.max_length ?? 100} caracteres`,
     enum: "selecione um tipo válido",
     missing: "é obrigatório",
   };
@@ -545,6 +611,83 @@ $("#filtro-texto").addEventListener("input", () => {
   clearTimeout(esperaBusca);
   esperaBusca = setTimeout(atualizar, 250);
 });
+
+// ---------------------------------------------------------------- chat
+
+function novoIdDeSessao() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+const chat = { sessaoId: novoIdDeSessao(), ocupado: false };
+
+function adicionarMensagem(texto, autor) {
+  const historico = $("#chat-historico");
+  const msg = document.createElement("div");
+  msg.className = `msg ${autor}`;
+  msg.textContent = texto;
+  historico.append(msg);
+  historico.scrollTop = historico.scrollHeight;
+  return msg;
+}
+
+function definirOcupado(ocupado) {
+  chat.ocupado = ocupado;
+  $("#chat-texto").disabled = ocupado;
+  document.querySelectorAll("#chat-form button, #chat-confirmacao button")
+    .forEach((b) => { b.disabled = ocupado; });
+}
+
+async function enviarAoChat(texto) {
+  texto = texto.trim();
+  if (!texto || chat.ocupado) return;
+
+  adicionarMensagem(texto, "usuario");
+  $("#chat-confirmacao").hidden = true;
+  const pensando = adicionarMensagem("pensando", "bot pensando");
+  definirOcupado(true);
+  try {
+    const r = await enviar("POST", "/api/chat", { mensagem: texto, sessao_id: chat.sessaoId });
+    pensando.remove();
+    adicionarMensagem(r.resposta, "bot");
+    $("#chat-confirmacao").hidden = !r.acao_pendente;
+    if (r.estoque_alterado) await atualizar();
+  } catch (erro) {
+    pensando.remove();
+    adicionarMensagem(erro.message, "erro");
+  } finally {
+    definirOcupado(false);
+    if ($("#chat-confirmacao").hidden) $("#chat-texto").focus();
+  }
+}
+
+$("#chat-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const campo = $("#chat-texto");
+  const texto = campo.value;
+  if (!texto.trim()) return;
+  campo.value = "";
+  enviarAoChat(texto);
+});
+
+document.querySelectorAll("#chat-confirmacao button").forEach((botao) =>
+  botao.addEventListener("click", () => enviarAoChat(botao.dataset.resposta)));
+
+// Em telas pequenas o chat abre por cima da página.
+function alternarChat(aberto) {
+  $("#chat").classList.toggle("aberto", aberto);
+  document.body.classList.toggle("chat-aberto", aberto);
+  if (aberto) $("#chat-texto").focus();
+}
+$("#chat-abrir").addEventListener("click", () => alternarChat(true));
+$("#chat-fechar").addEventListener("click", () => alternarChat(false));
+
+adicionarMensagem(
+  "Olá! Posso registrar entradas e saídas e consultar o estoque. Experimente:\n" +
+  "• chegaram 10 mouses Logitech M90\n• saiu 1 HD Seagate 1TB\n" +
+  "• quantos teclados temos?\n• o que está acabando?",
+  "bot",
+);
 
 (async function iniciar() {
   try {
