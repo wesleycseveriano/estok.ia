@@ -405,3 +405,8 @@ def _com_uso(falso, uso):
         return resposta
 
     return criar
+
+
+def test_cliente_falso_sem_respostas_avisa_o_teste_mal_configurado():
+    with pytest.raises(AssertionError, match="sem respostas"):
+        ClienteLLMFalso().responder("oi", "P")

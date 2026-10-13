@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - name: Instalar dependências
+        run: pip install -r requirements.txt
+
+      - name: Conferir se a tag bate com a versão do código
+        run: |
+          VERSAO=$(python -c "from app.main import VERSAO; print(VERSAO)")
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$VERSAO" != "$TAG" ]; then
+            echo "::error::A tag $GITHUB_REF_NAME não bate com VERSAO=$VERSAO em app/main.py"
+            exit 1
+          fi
+
+      - name: Checar formatação
+        run: |
+          isort --check app tests
+          black --check app tests
+
+      # Os testes usam SQLite em memória e uma IA falsa: não precisam de .env
+      # nem de chave de API.
+      - name: Rodar testes
+        run: pytest --cov=app --cov-report=term-missing
+
+  release:
+    needs: testes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Criar release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "estok.ia $GITHUB_REF_NAME" \
+            --generate-notes

@@ -441,3 +441,34 @@ class TestContexto:
         chat.enviar("primeira")
         chat.enviar("segunda")
         assert chat.llm.historicos[1] == []
+
+
+class TestCasosRaros:
+    def test_descartar_pendencia_de_item_que_foi_excluido(self, chat, sessao):
+        item = servico.cadastrar_item(sessao, TipoItem.SSD, "Kingston", "A400", 0)
+        chat.modelo_responde(_entrada(item, 5), {"acao": "fora_do_escopo"})
+        chat.enviar("chegaram 5 SSDs")
+        servico.excluir_item(sessao, item.id)
+
+        r = chat.enviar("deixa pra lá")
+        assert r["resposta"].startswith(
+            "(Descartei a entrada de 5 item que aguardava confirmação.)"
+        )
+
+    def test_item_some_entre_a_interpretacao_e_a_confirmacao(
+        self, chat, hd, monkeypatch
+    ):
+        from app.canais import conversa
+        from app.estoque.excecoes import ItemNaoEncontrado
+
+        def item_sumiu(sessao, item_id):
+            raise ItemNaoEncontrado(item_id)
+
+        monkeypatch.setattr(conversa.servico, "obter_item", item_sumiu)
+        chat.modelo_responde(_saida(hd, 1))
+        r = chat.enviar("saiu 1 HD")
+        assert r == {
+            "resposta": f"Item {hd.id} não encontrado.",
+            "acao_pendente": False,
+            "estoque_alterado": False,
+        }

@@ -12,7 +12,7 @@ descrita em um enunciado; o assistente escreveu o código e os testes, rodou a
 aplicação de verdade e corrigiu o que encontrou. Isso permitiu:
 
 ✨ Gerar a estrutura base em minutos: pastas, `requirements.txt` com versões fixas, Makefile, `.env.example`
-✨ Escrever o núcleo de regras de negócio junto com **191 testes pytest** (94% de cobertura)
+✨ Escrever o núcleo de regras de negócio junto com **205 testes pytest** (99% de cobertura)
 ✨ Ter a documentação interativa da API pronta via OpenAPI/Swagger do FastAPI
 ✨ Testar a interface em um navegador real (Chrome automatizado), incluindo a versão para celular
 ✨ Comparar modelos de IA na prática: o mesmo conjunto de frases foi testado em três modelos da Groq antes de escolher o `openai/gpt-oss-120b`
@@ -100,10 +100,28 @@ chegou mais JBL  →  10            → entende a resposta curta pelo contexto
 make test             # ou: pytest --cov=app
 ```
 
-São 191 testes, com 94% de cobertura. Usam SQLite em memória e uma IA falsa
+São 205 testes, com 99% de cobertura. Usam SQLite em memória e uma IA falsa
 (`ClienteLLMFalso`), então **nunca chamam a IA de verdade** e não gastam a cota.
 
 Use `make help` para ver todos os comandos (`install`, `run`, `seed`, `test`, `format`).
+
+## Releases
+
+Para publicar uma versão, atualize `VERSAO` em `app/main.py` e envie uma tag:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+O workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) então:
+
+1. Confere se a tag bate com a `VERSAO` do código.
+2. Checa a formatação (`isort` e `black`).
+3. Roda todos os testes.
+4. Cria a release no GitHub, com as notas geradas a partir dos commits.
+
+Se qualquer passo falhar, a release não é criada.
 
 ## Segurança
 
