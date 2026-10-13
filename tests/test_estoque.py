@@ -1,11 +1,6 @@
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from app.estoque import servico
-from app.estoque.banco import obter_sessao
 from app.estoque.excecoes import (
     EstoqueInsuficiente,
     ItemComSaldo,
@@ -13,37 +8,7 @@ from app.estoque.excecoes import (
     ItemNaoEncontrado,
     QuantidadeInvalida,
 )
-from app.estoque.modelos import Base, OrigemMovimentacao, TipoItem, TipoMovimentacao
-from app.main import app
-
-
-@pytest.fixture
-def fabrica_sessao():
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    yield sessionmaker(bind=engine, expire_on_commit=False)
-    engine.dispose()
-
-
-@pytest.fixture
-def sessao(fabrica_sessao):
-    with fabrica_sessao() as s:
-        yield s
-
-
-@pytest.fixture
-def cliente(fabrica_sessao):
-    def _sessao_de_teste():
-        with fabrica_sessao() as s:
-            yield s
-
-    app.dependency_overrides[obter_sessao] = _sessao_de_teste
-    yield TestClient(app)
-    app.dependency_overrides.clear()
+from app.estoque.modelos import OrigemMovimentacao, TipoItem, TipoMovimentacao
 
 
 def _mouse(sessao, quantidade=10):

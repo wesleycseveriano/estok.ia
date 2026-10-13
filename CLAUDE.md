@@ -23,8 +23,9 @@ Stack obrigatória:
 - pytest para testes
 - Front-end: uma única página HTML com JavaScript puro, servida pelo FastAPI
   (sem React ou build de front-end)
-- LLM: xAI (Grok), usando o SDK oficial "openai" para Python apontando para
-  a base URL da xAI. Base URL, modelo e chave vêm de variáveis de ambiente,
+- LLM: Groq (plano gratuito, modelo openai/gpt-oss-120b), usando o SDK
+  oficial "openai" para Python apontando para a base URL da Groq. Antes era
+  xAI (Grok); trocado por custo. Base URL, modelo e chave vêm de variáveis de ambiente,
   para ser possível trocar de provedor compatível com OpenAI sem alterar
   código.
 
