@@ -4,6 +4,28 @@ Controle de estoque simples para o almoxarifado de TI, em FastAPI.
 Os itens podem ser movimentados pela tela (formulários e botões) ou por um
 chat em linguagem natural com IA ("saiu 1 HD Seagate 1TB", "o que está acabando?").
 
+## Telas
+
+**Tela principal:** tabela de estoque com filtros e ações por item, chat ao lado.
+Itens com estoque baixo ficam em vermelho, como a Placa-mãe ASUS com 3 unidades.
+
+![Tela principal do estok.ia, com a tabela de estoque e o chat](docs/img/tela-principal.png)
+
+**1. O usuário escreve em linguagem natural.** A IA identifica o item
+("KB216" é o Teclado Dell KB216) e a quantidade. O sistema não altera nada
+antes de o usuário responder "sim" ou "não".
+
+![Chat pedindo confirmação da saída de 5 teclados Dell KB216](docs/img/chat-confirmacao.png)
+
+**2. Após o "sim", a saída é registrada.** O chat informa o saldo novo
+(45 → 40), e a tabela se atualiza sozinha: o item alterado sobe para o topo.
+
+![Saída registrada pelo chat e teclado KB216 no topo da tabela com 40 unidades](docs/img/chat-saida-registrada.png)
+
+**3. Consultas são respondidas na hora**, sem confirmação, já com o total.
+
+![Chat respondendo quais HDs existem no estoque, com o total de 83 unidades](docs/img/chat-consulta.png)
+
 ## Storytelling: como a IA acelerou este projeto
 
 O projeto foi construído em etapas curtas com o **Claude Code** (assistente de
