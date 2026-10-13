@@ -14,7 +14,7 @@ from app.interpretador.acoes import (
     AcaoSaida,
     validador_acao,
 )
-from app.interpretador.cliente_llm import ClienteLLM
+from app.interpretador.cliente_llm import ClienteLLM, Historico
 from app.interpretador.prompt import montar_prompt_sistema
 
 logger = logging.getLogger(__name__)
@@ -29,8 +29,16 @@ def _limpar_resposta(texto: str) -> str:
     return cerca.group(1) if cerca else texto
 
 
-def interpretar(mensagem: str, sessao: Session, cliente: ClienteLLM) -> Acao:
+def interpretar(
+    mensagem: str,
+    sessao: Session,
+    cliente: ClienteLLM,
+    historico: Historico = (),
+) -> Acao:
     """Pede ao modelo uma ação para a mensagem e devolve-a validada.
+
+    "historico" (trocas anteriores da conversa) é só contexto, para o modelo
+    entender respostas curtas como "10" a uma pergunta de esclarecimento.
 
     Qualquer resposta inválida vira AcaoNaoEntendida. Erros de comunicação com
     o modelo (ErroClienteLLM) são propagados para o canal decidir o que dizer.
@@ -39,7 +47,9 @@ def interpretar(mensagem: str, sessao: Session, cliente: ClienteLLM) -> Acao:
         return AcaoNaoEntendida(motivo="mensagem vazia")
 
     itens = servico.buscar_itens(sessao)
-    resposta = cliente.responder(mensagem.strip(), montar_prompt_sistema(itens))
+    resposta = cliente.responder(
+        mensagem.strip(), montar_prompt_sistema(itens), historico
+    )
 
     try:
         acao = validador_acao.validate_json(_limpar_resposta(resposta))

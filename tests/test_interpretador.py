@@ -22,6 +22,7 @@ from app.interpretador.cliente_falso import ClienteLLMFalso
 from app.interpretador.cliente_llm import ClienteOpenAICompativel, ErroClienteLLM
 from app.interpretador.interpretador import interpretar
 from app.interpretador.prompt import montar_prompt_sistema
+from app.interpretador.registro_llm import registrar_chamada
 
 
 @pytest.fixture
@@ -179,6 +180,15 @@ class TestComportamento:
             linha = f"{item.id} | {item.tipo.value} | {item.marca} | {item.modelo}"
             assert linha in prompt
 
+    def test_repassa_o_historico_ao_modelo(self, sessao, itens):
+        historico = [
+            {"role": "user", "content": "chegou mais JBL"},
+            {"role": "assistant", "content": "Quantas unidades chegaram?"},
+        ]
+        cliente = ClienteLLMFalso('{"acao": "fora_do_escopo"}')
+        interpretar("10", sessao, cliente, historico)
+        assert cliente.historicos == [historico]
+
     @pytest.mark.parametrize("mensagem", ["", "   "])
     def test_mensagem_vazia_nao_chama_o_modelo(self, sessao, mensagem):
         cliente = ClienteLLMFalso()
@@ -269,6 +279,19 @@ class TestClienteOpenAICompativel:
             {"role": "user", "content": "oi"},
         ]
 
+    def test_historico_vai_entre_o_sistema_e_a_mensagem_atual(self, ambiente_llm):
+        falso = _OpenAIDeMentira("{}")
+        historico = [
+            {"role": "user", "content": "chegou mais JBL"},
+            {"role": "assistant", "content": "Quantas?"},
+        ]
+        ClienteOpenAICompativel(falso).responder("10", "PROMPT", historico)
+        assert falso.chamadas[0]["messages"] == [
+            {"role": "system", "content": "PROMPT"},
+            *historico,
+            {"role": "user", "content": "10"},
+        ]
+
     def test_sem_suporte_a_json_tenta_de_novo_sem_response_format(self, ambiente_llm):
         falso = _OpenAIDeMentira(
             _erro_http(
@@ -320,3 +343,65 @@ class TestClienteOpenAICompativel:
     def test_conteudo_vazio_vira_texto_vazio(self, ambiente_llm):
         falso = _OpenAIDeMentira(None)
         assert ClienteOpenAICompativel(falso).responder("oi", "P") == ""
+
+
+# ---------------------------------------------------------------- log das chamadas
+
+
+class TestLogDaIA:
+    def test_grava_requisicao_e_resposta(self, ambiente_llm, monkeypatch, tmp_path):
+        arquivo = tmp_path / "logs" / "llm.log"
+        monkeypatch.setenv("LLM_LOG_ARQUIVO", str(arquivo))
+        uso = SimpleNamespace(prompt_tokens=1400, completion_tokens=80)
+        falso = _OpenAIDeMentira('{"acao": "fora_do_escopo"}')
+        falso.chat.completions.create = _com_uso(falso, uso)
+
+        ClienteOpenAICompativel(falso).responder(
+            "qual a previsão?", "PROMPT DE SISTEMA"
+        )
+
+        log = arquivo.read_text(encoding="utf-8")
+        assert "modelo: modelo-de-teste" in log
+        assert "tokens: entrada 1400, saída 80" in log
+        assert '"response_format": {"type": "json_object"}' in log
+        assert "--- system\nPROMPT DE SISTEMA" in log
+        assert "--- user\nqual a previsão?" in log
+        assert '--- resposta do modelo\n{"acao": "fora_do_escopo"}' in log
+        assert "chave-de-teste" not in log  # a chave da API nunca vai para o log
+
+    def test_grava_erros(self, ambiente_llm, monkeypatch, tmp_path):
+        arquivo = tmp_path / "llm.log"
+        monkeypatch.setenv("LLM_LOG_ARQUIVO", str(arquivo))
+        falso = _OpenAIDeMentira(_erro_http(openai.RateLimitError, 429, "limite"))
+        with pytest.raises(ErroClienteLLM):
+            ClienteOpenAICompativel(falso).responder("oi", "P")
+        assert "--- ERRO\nRateLimitError: limite" in arquivo.read_text(encoding="utf-8")
+
+    def test_acumula_chamadas(self, ambiente_llm, monkeypatch, tmp_path):
+        arquivo = tmp_path / "llm.log"
+        monkeypatch.setenv("LLM_LOG_ARQUIVO", str(arquivo))
+        falso = _OpenAIDeMentira("{}", "{}")
+        cliente = ClienteOpenAICompativel(falso)
+        cliente.responder("um", "P")
+        cliente.responder("dois", "P")
+        assert arquivo.read_text(encoding="utf-8").count("=" * 80) == 2
+
+    def test_vazio_desliga_o_log(self, ambiente_llm, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        ClienteOpenAICompativel(_OpenAIDeMentira("{}")).responder("oi", "P")
+        assert not (tmp_path / "logs").exists()
+
+    def test_falha_ao_gravar_nao_quebra_a_chamada(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("LLM_LOG_ARQUIVO", str(tmp_path))  # é uma pasta
+        registrar_chamada({"model": "m", "messages": []}, 0.1, texto="{}")
+
+
+def _com_uso(falso, uso):
+    criar_original = falso.chat.completions.create
+
+    def criar(**parametros):
+        resposta = criar_original(**parametros)
+        resposta.usage = uso
+        return resposta
+
+    return criar

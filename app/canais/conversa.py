@@ -8,6 +8,7 @@ import logging
 import re
 import threading
 import unicodedata
+from collections import deque
 from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
@@ -50,6 +51,8 @@ MSG_NAO_ENTENDI = (
 MSG_SEM_PENDENCIA = "Não há nenhuma ação aguardando confirmação."
 MSG_ERRO_INESPERADO = "Ocorreu um erro inesperado. Nada foi alterado no estoque."
 
+TROCAS_DE_CONTEXTO = 3  # pares (usuário, assistente) enviados à IA
+
 
 @dataclass
 class RespostaConversa:
@@ -72,6 +75,31 @@ class Pendencias:
     def retirar(self, sessao_id: str) -> AcaoMovimento | None:
         with self._trava:
             return self._acoes.pop(sessao_id, None)
+
+
+class MemoriaConversa:
+    """Últimas trocas de cada sessão, enviadas à IA como contexto.
+
+    Permite responder "10" a "Quantas unidades chegaram?". Em memória e curta
+    de propósito: poucas trocas bastam e cada uma custa tokens.
+    """
+
+    def __init__(self, trocas: int = TROCAS_DE_CONTEXTO):
+        self._trocas = trocas
+        self._historicos: dict[str, deque] = {}
+        self._trava = threading.Lock()
+
+    def obter(self, sessao_id: str) -> list[dict[str, str]]:
+        with self._trava:
+            return list(self._historicos.get(sessao_id, ()))
+
+    def registrar(self, sessao_id: str, mensagem: str, resposta: str) -> None:
+        with self._trava:
+            historico = self._historicos.setdefault(
+                sessao_id, deque(maxlen=2 * self._trocas)
+            )
+            historico.append({"role": "user", "content": mensagem})
+            historico.append({"role": "assistant", "content": resposta})
 
 
 # ---------------------------------------------------------------- textos
@@ -186,9 +214,12 @@ def processar_mensagem(
     sessao: Session,
     cliente: ClienteLLM,
     pendencias: Pendencias,
+    memoria: MemoriaConversa,
 ) -> RespostaConversa:
     try:
-        return _processar(mensagem, sessao_id, sessao, cliente, pendencias)
+        resposta = _processar(
+            mensagem, sessao_id, sessao, cliente, pendencias, memoria.obter(sessao_id)
+        )
     except ErroClienteLLM as erro:
         return RespostaConversa(str(erro))
     except ErroEstoque as erro:
@@ -198,8 +229,14 @@ def processar_mensagem(
         sessao.rollback()
         return RespostaConversa(MSG_ERRO_INESPERADO)
 
+    # Só trocas bem-sucedidas viram contexto; erros da IA não ajudam o modelo.
+    memoria.registrar(sessao_id, mensagem, resposta.resposta)
+    return resposta
 
-def _processar(mensagem, sessao_id, sessao, cliente, pendencias) -> RespostaConversa:
+
+def _processar(
+    mensagem, sessao_id, sessao, cliente, pendencias, historico
+) -> RespostaConversa:
     palavra = _normalizar(mensagem)
     pendente = pendencias.retirar(sessao_id)
 
@@ -215,7 +252,7 @@ def _processar(mensagem, sessao_id, sessao, cliente, pendencias) -> RespostaConv
 
     try:
         resposta = _interpretar_e_responder(
-            mensagem, sessao_id, sessao, cliente, pendencias
+            mensagem, sessao_id, sessao, cliente, pendencias, historico
         )
     except ErroClienteLLM:
         # A IA falhou: a ação anterior continua aguardando confirmação.
@@ -229,9 +266,9 @@ def _processar(mensagem, sessao_id, sessao, cliente, pendencias) -> RespostaConv
 
 
 def _interpretar_e_responder(
-    mensagem, sessao_id, sessao, cliente, pendencias
+    mensagem, sessao_id, sessao, cliente, pendencias, historico
 ) -> RespostaConversa:
-    acao = interpretar(mensagem, sessao, cliente)
+    acao = interpretar(mensagem, sessao, cliente, historico)
 
     if isinstance(acao, (AcaoEntrada, AcaoSaida)):
         return _pedir_confirmacao(sessao, sessao_id, acao, pendencias)

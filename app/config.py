@@ -19,6 +19,11 @@ def obter_config_llm() -> dict[str, str | None]:
     }
 
 
+def obter_arquivo_log_llm() -> str:
+    """Caminho do log das chamadas à IA; vazio desliga o log."""
+    return os.getenv("LLM_LOG_ARQUIVO", "logs/llm.log").strip()
+
+
 def obter_limite_estoque_baixo() -> int:
     """Lido a cada chamada, para refletir mudanças no ambiente (e nos testes)."""
     valor = os.getenv("ESTOQUE_BAIXO_LIMITE", str(LIMITE_ESTOQUE_BAIXO_PADRAO))

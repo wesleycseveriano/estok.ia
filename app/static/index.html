@@ -16,6 +16,7 @@
     --primaria-texto: #ffffff;
     --perigo: #c62828;
     --perigo-fundo: #fdecec;
+    --destaque: #ffe58a;
     --sucesso: #1b7f45;
     --sombra: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .1);
     --raio: 8px;
@@ -31,6 +32,7 @@
       --primaria-texto: #0d1220;
       --perigo: #ff6b6b;
       --perigo-fundo: #3a1f22;
+      --destaque: #5c4a0b;
       --sucesso: #4cc38a;
       --sombra: none;
     }
@@ -115,6 +117,16 @@
   tr.baixo td { background: var(--perigo-fundo); }
   tr.baixo td.numero { color: var(--perigo); font-weight: 700; }
   tr.baixo td:first-child { box-shadow: inset 3px 0 0 var(--perigo); }
+  /* Linha alterada desde a última atualização: pisca duas vezes e some. */
+  tr.alterada td { animation: destaque 2.4s ease-out; }
+  @keyframes destaque {
+    0%, 30%, 60% { background-color: var(--destaque); }
+    15%, 45% { background-color: transparent; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    tr.alterada td { animation: destaque-suave 2.4s ease-out; }
+    @keyframes destaque-suave { 0% { background-color: var(--destaque); } }
+  }
   .acoes { display: flex; gap: 6px; flex-wrap: nowrap; }
   .mini-form { display: flex; gap: 6px; align-items: center; }
   .mini-form input { width: 80px; padding: 5px 8px; }
@@ -308,6 +320,7 @@ const NOMES_CAMPOS = {
 
 const estado = {
   idsEstoqueBaixo: new Set(),
+  versoes: null,          // id -> atualizado_em da última carga (null = 1ª carga)
   itemEmEdicao: null,   // null = criando um novo item
   itemAExcluir: null,
 };
@@ -399,7 +412,14 @@ async function atualizar() {
     estado.idsEstoqueBaixo = new Set(baixos.map((i) => i.id));
     $("#total-itens").textContent = todos.length;
     $("#total-baixo").textContent = baixos.length;
-    desenharTabela(filtrados ?? todos, params.size > 0);
+
+    // Compara com a carga anterior para destacar o que mudou (pela tela ou pelo chat).
+    const anteriores = estado.versoes;
+    estado.versoes = new Map(todos.map((i) => [i.id, i.atualizado_em]));
+    const alterados = new Set(
+      anteriores ? todos.filter((i) => anteriores.get(i.id) !== i.atualizado_em).map((i) => i.id) : [],
+    );
+    desenharTabela(filtrados ?? todos, params.size > 0, alterados);
   } catch (erro) {
     avisar(erro.message, "erro");
   }
@@ -416,7 +436,14 @@ function criarBotao(rotulo, aoClicar, classe = "") {
   return botao;
 }
 
-function desenharTabela(itens, filtrando) {
+/** Mais recentes primeiro: o item que acabou de mudar vai para o topo. */
+function porUltimaAlteracao(a, b) {
+  if (a.atualizado_em !== b.atualizado_em) return a.atualizado_em < b.atualizado_em ? 1 : -1;
+  return b.id - a.id;
+}
+
+function desenharTabela(itens, filtrando, alterados = new Set()) {
+  itens = [...itens].sort(porUltimaAlteracao);
   const corpo = $("#corpo-tabela");
   corpo.replaceChildren();
 
@@ -430,9 +457,10 @@ function desenharTabela(itens, filtrando) {
     const linha = document.createElement("tr");
     const baixo = estado.idsEstoqueBaixo.has(item.id);
     if (baixo) {
-      linha.className = "baixo";
+      linha.classList.add("baixo");
       linha.title = "Estoque baixo";
     }
+    if (alterados.has(item.id)) linha.classList.add("alterada");
     for (const valor of [item.tipo, item.marca, item.modelo]) {
       const celula = document.createElement("td");
       celula.textContent = valor;
@@ -621,15 +649,23 @@ function novoIdDeSessao() {
 
 const chat = { sessaoId: novoIdDeSessao(), ocupado: false };
 
-function adicionarMensagem(texto, autor) {
+function rolarParaFim() {
   const historico = $("#chat-historico");
+  historico.scrollTop = historico.scrollHeight;
+}
+
+function adicionarMensagem(texto, autor) {
   const msg = document.createElement("div");
   msg.className = `msg ${autor}`;
   msg.textContent = texto;
-  historico.append(msg);
-  historico.scrollTop = historico.scrollHeight;
+  $("#chat-historico").append(msg);
+  rolarParaFim();
   return msg;
 }
+
+// Quando a área do histórico encolhe (botões Sim/Não aparecendo, teclado do
+// celular abrindo), mantém a última mensagem visível.
+new ResizeObserver(rolarParaFim).observe($("#chat-historico"));
 
 function definirOcupado(ocupado) {
   chat.ocupado = ocupado;
@@ -651,6 +687,7 @@ async function enviarAoChat(texto) {
     pensando.remove();
     adicionarMensagem(r.resposta, "bot");
     $("#chat-confirmacao").hidden = !r.acao_pendente;
+    rolarParaFim();
     if (r.estoque_alterado) await atualizar();
   } catch (erro) {
     pensando.remove();

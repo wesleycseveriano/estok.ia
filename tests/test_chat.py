@@ -5,8 +5,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.canais.chat_web import obter_cliente_llm, obter_pendencias
-from app.canais.conversa import MSG_ERRO_INESPERADO, Pendencias
+from app.canais.chat_web import obter_cliente_llm, obter_memoria, obter_pendencias
+from app.canais.conversa import MSG_ERRO_INESPERADO, MemoriaConversa, Pendencias
 from app.estoque import servico
 from app.estoque.banco import obter_sessao
 from app.estoque.modelos import OrigemMovimentacao, TipoItem, TipoMovimentacao
@@ -51,6 +51,8 @@ def chat(fabrica_sessao, sessao):
     app.dependency_overrides[obter_sessao] = _sessao_de_teste
     app.dependency_overrides[obter_cliente_llm] = lambda: conversa.llm
     app.dependency_overrides[obter_pendencias] = lambda: pendencias
+    memoria = MemoriaConversa()
+    app.dependency_overrides[obter_memoria] = lambda: memoria
     yield conversa
     app.dependency_overrides.clear()
 
@@ -375,3 +377,67 @@ class TestValidacao:
     def test_mensagem_com_500_caracteres_e_aceita(self, chat):
         chat.modelo_responde({"acao": "fora_do_escopo"})
         assert chat.enviar("x" * 500)["resposta"].startswith("Só consigo")
+
+
+# ---------------------------------------------------------------- contexto
+
+
+def _troca(usuario, assistente):
+    return [
+        {"role": "user", "content": usuario},
+        {"role": "assistant", "content": assistente},
+    ]
+
+
+class TestContexto:
+    def test_resposta_curta_a_um_esclarecimento(self, chat, sessao):
+        jbl = servico.cadastrar_item(sessao, TipoItem.HEADSET, "JBL", "Quantum 100", 2)
+        pergunta = "Quantas unidades do Headset JBL Quantum 100 chegaram?"
+        chat.modelo_responde(
+            {"acao": "esclarecer", "pergunta": pergunta}, _entrada(jbl, 10)
+        )
+
+        assert chat.enviar("chegou mais JBL")["resposta"] == pergunta
+        r = chat.enviar("10")
+
+        assert r["resposta"].startswith("Confirmar entrada de 10 Headset JBL")
+        assert r["acao_pendente"] is True
+        assert chat.llm.historicos[0] == []
+        assert chat.llm.historicos[1] == _troca("chegou mais JBL", pergunta)
+
+    def test_historico_inclui_confirmacoes(self, chat, hd):
+        chat.modelo_responde(_saida(hd, 1), {"acao": "fora_do_escopo"})
+        pedido = chat.enviar("saiu 1 HD")["resposta"]
+        feito = chat.enviar("sim")["resposta"]
+        chat.enviar("valeu")
+
+        assert chat.llm.historicos[1] == (
+            _troca("saiu 1 HD", pedido) + _troca("sim", feito)
+        )
+
+    def test_guarda_so_as_ultimas_tres_trocas(self, chat):
+        chat.modelo_responde(*[{"acao": "fora_do_escopo"}] * 5)
+        for i in range(5):
+            chat.enviar(f"mensagem {i}")
+
+        historico = chat.llm.historicos[4]
+        assert len(historico) == 6
+        assert [m["content"] for m in historico if m["role"] == "user"] == [
+            "mensagem 1",
+            "mensagem 2",
+            "mensagem 3",
+        ]
+
+    def test_historico_separado_por_sessao(self, chat):
+        chat.modelo_responde({"acao": "fora_do_escopo"}, {"acao": "fora_do_escopo"})
+        chat.enviar("oi", sessao_id="ana")
+        chat.enviar("oi", sessao_id="bruno")
+        assert chat.llm.historicos[1] == []
+
+    def test_falha_da_ia_nao_entra_no_historico(self, chat):
+        chat.modelo_responde(
+            ErroClienteLLM("IA fora do ar."), {"acao": "fora_do_escopo"}
+        )
+        chat.enviar("primeira")
+        chat.enviar("segunda")
+        assert chat.llm.historicos[1] == []

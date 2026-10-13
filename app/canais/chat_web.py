@@ -6,9 +6,13 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, StringConstraints
 from sqlalchemy.orm import Session
 
-from app.canais.conversa import Pendencias, processar_mensagem
+from app.canais.conversa import MemoriaConversa, Pendencias, processar_mensagem
 from app.estoque.banco import obter_sessao
-from app.interpretador.cliente_llm import ClienteLLM, ClienteOpenAICompativel
+from app.interpretador.cliente_llm import (
+    ClienteLLM,
+    ClienteOpenAICompativel,
+    Historico,
+)
 
 router = APIRouter(prefix="/api")
 
@@ -38,14 +42,17 @@ class _ClienteSobDemanda(ClienteLLM):
     def __init__(self):
         self._cliente: ClienteLLM | None = None
 
-    def responder(self, mensagem: str, prompt_sistema: str) -> str:
+    def responder(
+        self, mensagem: str, prompt_sistema: str, historico: Historico = ()
+    ) -> str:
         if self._cliente is None:
             self._cliente = ClienteOpenAICompativel()
-        return self._cliente.responder(mensagem, prompt_sistema)
+        return self._cliente.responder(mensagem, prompt_sistema, historico)
 
 
 _cliente_llm = _ClienteSobDemanda()
 _pendencias = Pendencias()
+_memoria = MemoriaConversa()
 
 
 def obter_cliente_llm() -> ClienteLLM:
@@ -56,13 +63,18 @@ def obter_pendencias() -> Pendencias:
     return _pendencias
 
 
+def obter_memoria() -> MemoriaConversa:
+    return _memoria
+
+
 @router.post("/chat", response_model=RespostaChat)
 def conversar(
     dados: MensagemChat,
     sessao: Session = Depends(obter_sessao),
     cliente: ClienteLLM = Depends(obter_cliente_llm),
     pendencias: Pendencias = Depends(obter_pendencias),
+    memoria: MemoriaConversa = Depends(obter_memoria),
 ):
     return processar_mensagem(
-        dados.mensagem, dados.sessao_id, sessao, cliente, pendencias
+        dados.mensagem, dados.sessao_id, sessao, cliente, pendencias, memoria
     )

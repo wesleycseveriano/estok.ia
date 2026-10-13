@@ -17,6 +17,9 @@ ENV/
 # Banco de dados
 *.db
 
+# Logs (podem conter mensagens dos usuários)
+logs/
+
 # Testes e cobertura
 .pytest_cache/
 .coverage

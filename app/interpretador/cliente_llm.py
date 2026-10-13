@@ -1,11 +1,14 @@
 """Acesso ao modelo de linguagem, sempre atrás da interface ClienteLLM."""
 
 import logging
+import time
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 
 import openai
 
 from app.config import obter_config_llm
+from app.interpretador.registro_llm import registrar_chamada
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +20,18 @@ class ErroClienteLLM(Exception):
     """O modelo não pôde ser consultado (configuração, rede, timeout, etc.)."""
 
 
+Historico = Sequence[dict[str, str]]  # [{"role": "user"|"assistant", "content": ...}]
+
+
 class ClienteLLM(ABC):
     @abstractmethod
-    def responder(self, mensagem: str, prompt_sistema: str) -> str:
-        """Envia a mensagem do usuário com o prompt de sistema e devolve o texto."""
+    def responder(
+        self, mensagem: str, prompt_sistema: str, historico: Historico = ()
+    ) -> str:
+        """Envia a mensagem do usuário com o prompt de sistema e devolve o texto.
+
+        "historico" traz as trocas anteriores da conversa, só como contexto.
+        """
 
 
 class ClienteOpenAICompativel(ClienteLLM):
@@ -51,20 +62,39 @@ class ClienteOpenAICompativel(ClienteLLM):
         )
         self._usar_json = True
 
-    def responder(self, mensagem: str, prompt_sistema: str) -> str:
+    def _criar(self, parametros: dict):
+        """Faz uma chamada à API e grava-a no log, com sucesso ou erro."""
+        inicio = time.perf_counter()
+        try:
+            resposta = self._cliente.chat.completions.create(**parametros)
+        except openai.OpenAIError as erro:
+            registrar_chamada(parametros, time.perf_counter() - inicio, erro=erro)
+            raise
+        registrar_chamada(
+            parametros,
+            time.perf_counter() - inicio,
+            texto=resposta.choices[0].message.content,
+            uso=getattr(resposta, "usage", None),
+        )
+        return resposta
+
+    def responder(
+        self, mensagem: str, prompt_sistema: str, historico: Historico = ()
+    ) -> str:
         parametros = {
             "model": self.modelo,
             "temperature": TEMPERATURA,
             "messages": [
                 {"role": "system", "content": prompt_sistema},
+                *historico,
                 {"role": "user", "content": mensagem},
             ],
         }
         try:
             if self._usar_json:
                 try:
-                    resposta = self._cliente.chat.completions.create(
-                        **parametros, response_format={"type": "json_object"}
+                    resposta = self._criar(
+                        {**parametros, "response_format": {"type": "json_object"}}
                     )
                 except openai.BadRequestError as erro:
                     # Alguns provedores devolvem 400 para outros problemas
@@ -73,9 +103,9 @@ class ClienteOpenAICompativel(ClienteLLM):
                     if "response_format" not in str(erro).lower():
                         raise
                     self._usar_json = False
-                    resposta = self._cliente.chat.completions.create(**parametros)
+                    resposta = self._criar(parametros)
             else:
-                resposta = self._cliente.chat.completions.create(**parametros)
+                resposta = self._criar(parametros)
         except openai.APITimeoutError as erro:
             raise ErroClienteLLM("A IA demorou demais para responder.") from erro
         except openai.RateLimitError as erro:

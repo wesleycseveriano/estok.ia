@@ -11,6 +11,12 @@ from app.estoque.modelos import Base
 from app.main import app
 
 
+@pytest.fixture(autouse=True)
+def sem_log_da_ia(monkeypatch):
+    """Os testes não gravam logs/llm.log; quem testa o log liga explicitamente."""
+    monkeypatch.setenv("LLM_LOG_ARQUIVO", "")
+
+
 @pytest.fixture
 def fabrica_sessao():
     engine = create_engine(
