@@ -1,3 +1,7 @@
+def _unidades(quantidade: int) -> str:
+    return f"{quantidade} unidade" if quantidade == 1 else f"{quantidade} unidades"
+
+
 class ErroEstoque(Exception):
     """Base para todos os erros de regra de negócio do estoque."""
 
@@ -19,10 +23,11 @@ class ItemDuplicado(ErroEstoque):
 
 class EstoqueInsuficiente(ErroEstoque):
     def __init__(self, disponivel: int, solicitado: int):
-        super().__init__(
-            f"Estoque insuficiente: há {disponivel} unidade(s) e foram "
-            f"solicitadas {solicitado}."
-        )
+        if disponivel == 0:
+            saldo = "não há unidades disponíveis"
+        else:
+            saldo = f"há apenas {_unidades(disponivel)}"
+        super().__init__(f"Estoque insuficiente: {saldo} (solicitado: {solicitado}).")
         self.disponivel = disponivel
         self.solicitado = solicitado
 

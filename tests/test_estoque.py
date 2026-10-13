@@ -404,3 +404,15 @@ class TestApi:
             ("saida", 2, "manual"),
             ("entrada", 5, "manual"),
         ]
+
+
+@pytest.mark.parametrize(
+    "disponivel, esperado",
+    [
+        (2, "Estoque insuficiente: há apenas 2 unidades (solicitado: 5)."),
+        (1, "Estoque insuficiente: há apenas 1 unidade (solicitado: 5)."),
+        (0, "Estoque insuficiente: não há unidades disponíveis (solicitado: 5)."),
+    ],
+)
+def test_mensagem_de_estoque_insuficiente(disponivel, esperado):
+    assert EstoqueInsuficiente(disponivel, 5).mensagem == esperado

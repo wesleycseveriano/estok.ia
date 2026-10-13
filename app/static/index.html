@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>estok.ia</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --fundo: #f4f5f7;
+    --painel: #ffffff;
+    --texto: #1d2330;
+    --texto-suave: #5d6577;
+    --borda: #dfe2e8;
+    --primaria: #2457d6;
+    --primaria-texto: #ffffff;
+    --perigo: #c62828;
+    --perigo-fundo: #fdecec;
+    --sucesso: #1b7f45;
+    --sombra: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .1);
+    --raio: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fundo: #14171d;
+      --painel: #1d2129;
+      --texto: #e6e8ec;
+      --texto-suave: #9aa3b2;
+      --borda: #2f3541;
+      --primaria: #5b8cff;
+      --primaria-texto: #0d1220;
+      --perigo: #ff6b6b;
+      --perigo-fundo: #3a1f22;
+      --sucesso: #4cc38a;
+      --sombra: none;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--fundo);
+    color: var(--texto);
+  }
+  button, input, select { font: inherit; color: inherit; }
+
+  /* ---------- cabeçalho ---------- */
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+    gap: 12px 24px;
+    padding: 16px 24px;
+    background: var(--painel);
+    border-bottom: 1px solid var(--borda);
+  }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+  header h1 span { color: var(--primaria); }
+  .resumo { display: flex; gap: 12px; }
+  .resumo div {
+    padding: 6px 14px; border: 1px solid var(--borda); border-radius: var(--raio);
+    font-size: 13px; color: var(--texto-suave);
+  }
+  .resumo strong { display: block; font-size: 20px; color: var(--texto); line-height: 1.2; }
+  .resumo .alerta strong { color: var(--perigo); }
+
+  /* ---------- layout ---------- */
+  .layout {
+    display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px;
+    padding: 24px; max-width: 1400px; margin: 0 auto;
+  }
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+    header { padding: 16px; }
+  }
+  .painel {
+    background: var(--painel); border: 1px solid var(--borda);
+    border-radius: var(--raio); box-shadow: var(--sombra);
+  }
+
+  /* ---------- filtros ---------- */
+  .filtros {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--borda);
+  }
+  .filtros select { flex: 0 1 200px; }
+  .filtros input { flex: 1 1 200px; }
+  .filtros .botao-primario { margin-left: auto; }
+
+  input, select {
+    padding: 7px 10px; border: 1px solid var(--borda); border-radius: 6px;
+    background: var(--painel); min-width: 0;
+  }
+  input:focus, select:focus, button:focus-visible {
+    outline: 2px solid var(--primaria); outline-offset: 1px;
+  }
+
+  button {
+    padding: 6px 12px; border: 1px solid var(--borda); border-radius: 6px;
+    background: var(--painel); cursor: pointer; white-space: nowrap;
+  }
+  button:hover { border-color: var(--texto-suave); }
+  button:disabled { opacity: .6; cursor: wait; }
+  .botao-primario { background: var(--primaria); border-color: var(--primaria); color: var(--primaria-texto); font-weight: 600; }
+  .botao-primario:hover { filter: brightness(1.08); border-color: var(--primaria); }
+  .botao-perigo { color: var(--perigo); }
+  .botao-perigo-cheio { background: var(--perigo); border-color: var(--perigo); color: #fff; font-weight: 600; }
+
+  /* ---------- tabela ---------- */
+  .tabela-rolagem { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 720px; }
+  th, td { padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--texto-suave); font-weight: 600; }
+  td.numero, th.numero { text-align: right; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+  tr.baixo td { background: var(--perigo-fundo); }
+  tr.baixo td.numero { color: var(--perigo); font-weight: 700; }
+  tr.baixo td:first-child { box-shadow: inset 3px 0 0 var(--perigo); }
+  .acoes { display: flex; gap: 6px; flex-wrap: nowrap; }
+  .mini-form { display: flex; gap: 6px; align-items: center; }
+  .mini-form input { width: 80px; padding: 5px 8px; }
+  .mini-form span { font-size: 13px; color: var(--texto-suave); }
+  .vazio { padding: 32px 16px; text-align: center; color: var(--texto-suave); }
+
+  /* ---------- chat (reservado) ---------- */
+  aside.chat {
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    min-height: 320px; padding: 24px; text-align: center; color: var(--texto-suave);
+    border-style: dashed;
+  }
+  aside.chat h2 { margin: 0 0 4px; font-size: 16px; color: var(--texto); }
+  aside.chat p { margin: 0; font-size: 14px; }
+
+  /* ---------- diálogos ---------- */
+  dialog {
+    width: min(440px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--borda);
+    border-radius: 12px; background: var(--painel); color: var(--texto);
+  }
+  dialog::backdrop { background: rgba(10, 14, 22, .5); }
+  dialog form { padding: 20px; display: grid; gap: 14px; }
+  dialog h2 { margin: 0; font-size: 18px; }
+  dialog label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--texto-suave); }
+  dialog p { margin: 0; }
+  .rodape-dialogo { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+  .erro-form { color: var(--perigo); font-size: 14px; min-height: 0; }
+  .erro-form:empty { display: none; }
+
+  /* ---------- avisos ---------- */
+  #avisos {
+    position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px;
+    z-index: 10; max-width: calc(100vw - 32px);
+  }
+  .aviso {
+    padding: 10px 14px; border-radius: var(--raio); background: var(--painel);
+    border: 1px solid var(--borda); border-left: 4px solid var(--sucesso);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .15); max-width: 380px;
+  }
+  .aviso.erro { border-left-color: var(--perigo); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>estok<span>.ia</span></h1>
+  <div class="resumo" aria-live="polite">
+    <div><strong id="total-itens">–</strong>itens cadastrados</div>
+    <div class="alerta"><strong id="total-baixo">–</strong>com estoque baixo</div>
+  </div>
+</header>
+
+<div class="layout">
+  <main class="painel">
+    <div class="filtros">
+      <select id="filtro-tipo" aria-label="Filtrar por tipo">
+        <option value="">Todos os tipos</option>
+      </select>
+      <input id="filtro-texto" type="search" placeholder="Buscar por marca ou modelo" aria-label="Buscar por marca ou modelo">
+      <button id="botao-novo" class="botao-primario" type="button">Novo item</button>
+    </div>
+    <div class="tabela-rolagem">
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo</th><th>Marca</th><th>Modelo</th>
+            <th class="numero">Quantidade</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="corpo-tabela"></tbody>
+      </table>
+      <div id="tabela-vazia" class="vazio" hidden></div>
+    </div>
+  </main>
+
+  <aside class="painel chat" aria-label="Chat">
+    <h2>Chat</h2>
+    <p>Em breve: controle o estoque escrevendo em linguagem natural.</p>
+  </aside>
+</div>
+
+<!-- Formulário de novo item / edição -->
+<dialog id="dialogo-item">
+  <form id="form-item" method="dialog" novalidate>
+    <h2 id="titulo-item">Novo item</h2>
+    <label>Tipo
+      <select name="tipo" required></select>
+    </label>
+    <label>Marca
+      <input name="marca" maxlength="100" required autocomplete="off">
+    </label>
+    <label>Modelo
+      <input name="modelo" maxlength="100" required autocomplete="off">
+    </label>
+    <label id="campo-quantidade">Quantidade inicial
+      <input name="quantidade" type="number" min="0" step="1" value="0" inputmode="numeric">
+    </label>
+    <p class="erro-form" id="erro-item" role="alert"></p>
+    <div class="rodape-dialogo">
+      <button type="button" data-fechar>Cancelar</button>
+      <button type="submit" class="botao-primario">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Confirmação de exclusão -->
+<dialog id="dialogo-excluir">
+  <form id="form-excluir" method="dialog">
+    <h2>Excluir item</h2>
+    <p id="texto-excluir"></p>
+    <p class="erro-form" id="erro-excluir" role="alert"></p>
+    <div class="rodape-dialogo">
+      <button type="button" data-fechar>Cancelar</button>
+      <button type="submit" class="botao-perigo-cheio">Excluir</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="avisos" aria-live="polite"></div>
+
+<script>
+"use strict";
+
+const NOMES_CAMPOS = { tipo: "Tipo", marca: "Marca", modelo: "Modelo", quantidade: "Quantidade" };
+
+const estado = {
+  idsEstoqueBaixo: new Set(),
+  itemEmEdicao: null,   // null = criando um novo item
+  itemAExcluir: null,
+};
+
+const $ = (seletor) => document.querySelector(seletor);
+
+// ---------------------------------------------------------------- API
+
+class ErroApi extends Error {}
+
+/** Converte a resposta de erro da API em uma frase legível. */
+function mensagemDeErro(status, corpo) {
+  const detalhe = corpo && corpo.detail;
+  if (typeof detalhe === "string") return detalhe;
+  if (Array.isArray(detalhe) && detalhe.length) {
+    return detalhe.map(traduzirErroValidacao).join(" ");
+  }
+  if (status >= 500) return "Erro interno no servidor. Tente novamente.";
+  return "Não foi possível concluir a operação.";
+}
+
+function traduzirErroValidacao(erro) {
+  const campo = NOMES_CAMPOS[erro.loc[erro.loc.length - 1]] || "Valor";
+  const motivos = {
+    greater_than: "deve ser maior que 0",
+    greater_than_equal: "não pode ser negativa",
+    int_type: "deve ser um número inteiro",
+    int_parsing: "deve ser um número inteiro",
+    int_from_float: "deve ser um número inteiro",
+    string_too_short: "é obrigatório",
+    string_too_long: "deve ter no máximo 100 caracteres",
+    enum: "selecione um tipo válido",
+    missing: "é obrigatório",
+  };
+  return `${campo}: ${motivos[erro.type] || "valor inválido"}.`;
+}
+
+async function api(caminho, opcoes = {}) {
+  let resposta;
+  try {
+    resposta = await fetch(caminho, {
+      ...opcoes,
+      headers: opcoes.body ? { "Content-Type": "application/json" } : undefined,
+    });
+  } catch {
+    throw new ErroApi("Não foi possível conectar ao servidor.");
+  }
+  if (resposta.status === 204) return null;
+  const corpo = await resposta.json().catch(() => null);
+  if (!resposta.ok) throw new ErroApi(mensagemDeErro(resposta.status, corpo));
+  return corpo;
+}
+
+const enviar = (metodo, caminho, dados) =>
+  api(caminho, { method: metodo, body: dados === undefined ? undefined : JSON.stringify(dados) });
+
+// ---------------------------------------------------------------- avisos
+
+function avisar(texto, tipo = "sucesso") {
+  const aviso = document.createElement("div");
+  aviso.className = `aviso ${tipo}`;
+  aviso.textContent = texto;
+  $("#avisos").append(aviso);
+  setTimeout(() => aviso.remove(), tipo === "erro" ? 6000 : 3000);
+}
+
+// ---------------------------------------------------------------- dados
+
+async function carregarTipos() {
+  const tipos = await api("/api/tipos");
+  const opcoes = tipos.map((t) => new Option(t, t));
+  $("#filtro-tipo").append(...opcoes);
+  $("#form-item").tipo.append(...tipos.map((t) => new Option(t, t)));
+}
+
+async function atualizar() {
+  const params = new URLSearchParams();
+  const tipo = $("#filtro-tipo").value;
+  const texto = $("#filtro-texto").value.trim();
+  if (tipo) params.set("tipo", tipo);
+  if (texto) params.set("texto", texto);
+
+  try {
+    const [todos, baixos, filtrados] = await Promise.all([
+      api("/api/itens"),
+      api("/api/itens/estoque-baixo"),
+      params.size ? api(`/api/itens?${params}`) : null,
+    ]);
+    estado.idsEstoqueBaixo = new Set(baixos.map((i) => i.id));
+    $("#total-itens").textContent = todos.length;
+    $("#total-baixo").textContent = baixos.length;
+    desenharTabela(filtrados ?? todos, params.size > 0);
+  } catch (erro) {
+    avisar(erro.message, "erro");
+  }
+}
+
+// ---------------------------------------------------------------- tabela
+
+function criarBotao(rotulo, aoClicar, classe = "") {
+  const botao = document.createElement("button");
+  botao.type = "button";
+  botao.textContent = rotulo;
+  if (classe) botao.className = classe;
+  botao.addEventListener("click", aoClicar);
+  return botao;
+}
+
+function desenharTabela(itens, filtrando) {
+  const corpo = $("#corpo-tabela");
+  corpo.replaceChildren();
+
+  const vazio = $("#tabela-vazia");
+  vazio.hidden = itens.length > 0;
+  vazio.textContent = filtrando
+    ? "Nenhum item encontrado com esses filtros."
+    : "Nenhum item cadastrado. Clique em “Novo item” para começar.";
+
+  for (const item of itens) {
+    const linha = document.createElement("tr");
+    const baixo = estado.idsEstoqueBaixo.has(item.id);
+    if (baixo) {
+      linha.className = "baixo";
+      linha.title = "Estoque baixo";
+    }
+    for (const valor of [item.tipo, item.marca, item.modelo]) {
+      const celula = document.createElement("td");
+      celula.textContent = valor;
+      linha.append(celula);
+    }
+    const qtd = document.createElement("td");
+    qtd.className = "numero";
+    qtd.textContent = item.quantidade;
+    linha.append(qtd);
+
+    const celulaAcoes = document.createElement("td");
+    celulaAcoes.append(criarAcoes(item, celulaAcoes));
+    linha.append(celulaAcoes);
+    corpo.append(linha);
+  }
+}
+
+function criarAcoes(item, celula) {
+  const acoes = document.createElement("div");
+  acoes.className = "acoes";
+  acoes.append(
+    criarBotao("+ Entrada", () => abrirMovimento(item, "entrada", celula)),
+    criarBotao("− Saída", () => abrirMovimento(item, "saida", celula)),
+    criarBotao("Editar", () => abrirFormulario(item)),
+    criarBotao("Excluir", () => abrirExclusao(item), "botao-perigo"),
+  );
+  return acoes;
+}
+
+/** Troca os botões da linha por um campo pequeno de quantidade. */
+function abrirMovimento(item, operacao, celula) {
+  const form = document.createElement("form");
+  form.className = "mini-form";
+
+  const rotulo = document.createElement("span");
+  rotulo.textContent = operacao === "entrada" ? "Entrada:" : "Saída:";
+
+  const campo = document.createElement("input");
+  campo.type = "number";
+  campo.min = "1";
+  campo.step = "1";
+  campo.value = "1";
+  campo.required = true;
+  campo.inputMode = "numeric";
+  campo.setAttribute("aria-label", `Quantidade de ${operacao === "entrada" ? "entrada" : "saída"}`);
+
+  const confirmar = document.createElement("button");
+  confirmar.type = "submit";
+  confirmar.className = "botao-primario";
+  confirmar.textContent = "OK";
+
+  const cancelar = criarBotao("Cancelar", () => celula.replaceChildren(criarAcoes(item, celula)));
+
+  form.append(rotulo, campo, confirmar, cancelar);
+  form.addEventListener("keydown", (e) => { if (e.key === "Escape") cancelar.click(); });
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const quantidade = Number(campo.value);
+    if (!Number.isInteger(quantidade) || quantidade <= 0) {
+      avisar("Quantidade: deve ser um número inteiro maior que 0.", "erro");
+      campo.focus();
+      return;
+    }
+    confirmar.disabled = true;
+    try {
+      const atualizado = await enviar("POST", `/api/itens/${item.id}/${operacao}`, { quantidade });
+      const verbo = operacao === "entrada" ? "Entrada" : "Saída";
+      avisar(`${verbo} de ${quantidade} registrada. ${atualizado.tipo} ${atualizado.marca} ${atualizado.modelo}: ${atualizado.quantidade} em estoque.`);
+      await atualizar();
+    } catch (erro) {
+      avisar(erro.message, "erro");
+      confirmar.disabled = false;
+      campo.select();
+    }
+  });
+
+  celula.replaceChildren(form);
+  campo.select();
+}
+
+// ---------------------------------------------------------------- novo / editar
+
+function abrirFormulario(item = null) {
+  estado.itemEmEdicao = item;
+  const form = $("#form-item");
+  form.reset();
+  $("#erro-item").textContent = "";
+  $("#titulo-item").textContent = item ? "Editar item" : "Novo item";
+  $("#campo-quantidade").hidden = Boolean(item);  // quantidade só muda por entrada/saída
+  if (item) {
+    form.tipo.value = item.tipo;
+    form.marca.value = item.marca;
+    form.modelo.value = item.modelo;
+  }
+  $("#dialogo-item").showModal();
+  form.marca.focus();
+}
+
+$("#form-item").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const erro = $("#erro-item");
+  const dados = {
+    tipo: form.tipo.value,
+    marca: form.marca.value.trim(),
+    modelo: form.modelo.value.trim(),
+  };
+
+  if (!dados.marca || !dados.modelo) {
+    erro.textContent = "Preencha marca e modelo.";
+    return;
+  }
+  if (!estado.itemEmEdicao) {
+    dados.quantidade = form.quantidade.value === "" ? 0 : Number(form.quantidade.value);
+    if (!Number.isInteger(dados.quantidade) || dados.quantidade < 0) {
+      erro.textContent = "Quantidade inicial: deve ser um número inteiro maior ou igual a 0.";
+      return;
+    }
+  }
+
+  const salvar = form.querySelector("[type=submit]");
+  salvar.disabled = true;
+  try {
+    if (estado.itemEmEdicao) {
+      await enviar("PUT", `/api/itens/${estado.itemEmEdicao.id}`, dados);
+      avisar("Item atualizado.");
+    } else {
+      await enviar("POST", "/api/itens", dados);
+      avisar("Item cadastrado.");
+    }
+    $("#dialogo-item").close();
+    await atualizar();
+  } catch (falha) {
+    erro.textContent = falha.message;
+  } finally {
+    salvar.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------- excluir
+
+function abrirExclusao(item) {
+  estado.itemAExcluir = item;
+  $("#erro-excluir").textContent = "";
+  $("#texto-excluir").textContent =
+    `Tem certeza que deseja excluir ${item.tipo} ${item.marca} ${item.modelo}? Esta ação não pode ser desfeita.`;
+  $("#dialogo-excluir").showModal();
+}
+
+$("#form-excluir").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const botao = e.target.querySelector("[type=submit]");
+  botao.disabled = true;
+  try {
+    await enviar("DELETE", `/api/itens/${estado.itemAExcluir.id}`);
+    $("#dialogo-excluir").close();
+    avisar("Item excluído.");
+    await atualizar();
+  } catch (falha) {
+    $("#erro-excluir").textContent = falha.message;
+  } finally {
+    botao.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------- eventos gerais
+
+document.querySelectorAll("[data-fechar]").forEach((botao) =>
+  botao.addEventListener("click", () => botao.closest("dialog").close()));
+
+$("#botao-novo").addEventListener("click", () => abrirFormulario());
+$("#filtro-tipo").addEventListener("change", atualizar);
+
+let esperaBusca;
+$("#filtro-texto").addEventListener("input", () => {
+  clearTimeout(esperaBusca);
+  esperaBusca = setTimeout(atualizar, 250);
+});
+
+(async function iniciar() {
+  try {
+    await carregarTipos();
+  } catch (erro) {
+    avisar(erro.message, "erro");
+  }
+  await atualizar();
+})();
+</script>
+</body>
+</html>
